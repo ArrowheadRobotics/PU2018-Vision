@@ -1,87 +1,29 @@
 package org.usfirst.frc.team706.robot;
 
-import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.SocketException;
-
 import com.ctre.phoenix.motorcontrol.ControlMode;
 import com.ctre.phoenix.motorcontrol.can.TalonSRX;
-import com.kauailabs.navx.frc.AHRS;
 
-import edu.wpi.cscore.UsbCamera;
-import edu.wpi.first.wpilibj.CameraServer;
-import edu.wpi.first.wpilibj.DriverStation;
-import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.SampleRobot;
-import edu.wpi.first.wpilibj.SerialPort;
+import edu.wpi.first.wpilibj.Timer;
+import edu.wpi.first.wpilibj.XboxController;
 
 @SuppressWarnings("deprecation")
 public class Robot extends SampleRobot {
 	
-	DriverStation driverStation;
-	Joystick leftJoy, rightJoy;
-	TalonSRX leftMotorOne, leftMotorTwo, leftMotorThree;
-	TalonSRX rightMotorOne, rightMotorTwo, rightMotorThree;
-	AHRS navx;
-	CameraServer camera;
-	UsbCamera usbCam;
-	
-	char[] fieldData;
-	double bearingOffset;
-	Thread socketThread;
-	byte[] buffer;
-	byte[] lastResponse;
-	DatagramPacket packet;
-	DatagramSocket socket;
+	XboxController xbox;
+	TalonSRX leftMotorOne, leftMotorTwo;
+	TalonSRX rightMotorOne, rightMotorTwo;
 	
 	public Robot() {
-		driverStation = DriverStation.getInstance();
-		leftJoy = new Joystick(Constants.LEFT_JOY);
-		rightJoy = new Joystick(Constants.RIGHT_JOY);
+		xbox = new XboxController(Constants.XBOX);
 		leftMotorOne = new TalonSRX(Constants.LEFT_MOTOR_ONE);
 		leftMotorTwo = new TalonSRX(Constants.LEFT_MOTOR_TWO);
-		leftMotorThree = new TalonSRX(Constants.LEFT_MOTOR_THREE);
 		rightMotorOne = new TalonSRX(Constants.RIGHT_MOTOR_ONE);
-		rightMotorOne = new TalonSRX(Constants.RIGHT_MOTOR_TWO);
-		rightMotorOne = new TalonSRX(Constants.RIGHT_MOTOR_THREE);
-		navx = new AHRS(SerialPort.Port.kMXP);
-		camera = CameraServer.getInstance();
-		usbCam = camera.startAutomaticCapture();
-		usbCam.setFPS(Constants.FPS);
-		usbCam.setResolution(Constants.WIDTH, Constants.HEIGHT);
-		try {
-			socket = new DatagramSocket(Constants.SOCKET_PORT);
-			buffer = new byte[Constants.BUFFER_LENGTH];
-			packet = new DatagramPacket(buffer, buffer.length);
-		}
-		catch (SocketException e) {
-			System.out.println("Socket Exception: " + e.toString());
-			socket = null;
-		}
+		rightMotorTwo = new TalonSRX(Constants.RIGHT_MOTOR_TWO);
 	}
 
 	@Override
 	public void robotInit() {
-		fieldData = driverStation.getGameSpecificMessage().toCharArray();
-		bearingOffset = navx.getAngle();
-		socketThread = new Thread(new Runnable() {
-			@Override
-			public void run() {
-				while (true) {
-					if (socket != null) {
-						try {
-							socket.receive(packet);
-							lastResponse = packet.getData();
-							System.out.println(lastResponse.toString());
-						}
-						catch (IOException e) {
-							System.out.println("IOException: " + e.toString());
-						}
-					}
-				}
-			}
-		});
 	}
 	
 	@Override
@@ -89,18 +31,20 @@ public class Robot extends SampleRobot {
 	
 	@Override
 	public void operatorControl() {
-		socketThread.start();
 		while (isOperatorControl() && isEnabled()) {
-			double leftJoyY = leftJoy.getY();
-			double rightJoyY = rightJoy.getY();
+			double leftJoyY = -(xbox.getRawAxis(3)+xbox.getRawAxis(0));
+			double rightJoyY = -(xbox.getRawAxis(3)-xbox.getRawAxis(0));
+			if (xbox.getRawAxis(2) > Constants.MIN_SPEED) {
+				leftJoyY = (xbox.getRawAxis(2)+xbox.getRawAxis(0));
+				rightJoyY = (xbox.getRawAxis(2)-xbox.getRawAxis(0));
+			}
 			leftJoyY *= Math.abs(leftJoyY) > Constants.MIN_SPEED ? Constants.MAX_SPEED : 0;
-			rightJoyY *= Math.abs(rightJoyY) > Constants.MIN_SPEED ? Constants.MAX_SPEED : 0;
-			leftMotorOne.set(ControlMode.Current, leftJoyY);
-			leftMotorTwo.set(ControlMode.Current, leftJoyY);
-			leftMotorThree.set(ControlMode.Current, leftJoyY);
-			rightMotorOne.set(ControlMode.Current, rightJoyY);
-			rightMotorTwo.set(ControlMode.Current, rightJoyY);
-			rightMotorThree.set(ControlMode.Current, rightJoyY);
+			rightJoyY *= Math.abs(rightJoyY) > Constants.MIN_SPEED ? -Constants.MAX_SPEED : 0;
+			leftMotorOne.set(ControlMode.PercentOutput, leftJoyY);
+			leftMotorTwo.set(ControlMode.PercentOutput, leftJoyY);
+			rightMotorOne.set(ControlMode.PercentOutput, rightJoyY);
+			rightMotorTwo.set(ControlMode.PercentOutput, rightJoyY);
+			Timer.delay(0.005);
 		}
 	}
 	
